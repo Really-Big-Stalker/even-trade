@@ -17,6 +17,8 @@ import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./src/supabase";
 import { signInWithGoogle, signOut } from "./src/auth";
 import { deleteTrade, listTrades, saveTrade, SavedTrade } from "./src/history";
+import { Colors, DARK, LIGHT } from "./src/theme";
+import { PlayScreen } from "./src/play/PlayScreen";
 
 const SOURCES: Record<Game, PriceSource> = { pokemon: tcgdex, magic: scryfall };
 const STORE_KEY = "even-trade:trade-v2";
@@ -27,11 +29,35 @@ const IS_PRO = false;
 type Side = "give" | "get";
 const EMPTY: Trade = { give: [], get: [] };
 
+type Tab = "trade" | "play";
+
 export default function App() {
   return (
     <SafeAreaProvider>
-      <TradeScreen />
+      <Root />
     </SafeAreaProvider>
+  );
+}
+
+function Root() {
+  const dark = useColorScheme() === "dark";
+  const c = dark ? DARK : LIGHT;
+  const [tab, setTab] = useState<Tab>("trade");
+  useEffect(() => { AsyncStorage.getItem("even-trade:tab").then((t) => { if (t === "play" || t === "trade") setTab(t); }).catch(() => {}); }, []);
+  const choose = (t: Tab) => { setTab(t); AsyncStorage.setItem("even-trade:tab", t).catch(() => {}); };
+  return (
+    <SafeAreaView edges={["top", "left", "right"]} style={[s.root, { backgroundColor: c.bg }]}>
+      <StatusBar style={dark ? "light" : "dark"} />
+      <View style={[s.tabs, { borderColor: c.line }]}>
+        {(["trade", "play"] as Tab[]).map((t) => (
+          <Pressable key={t} onPress={() => choose(t)} style={[s.tab, tab === t && { borderBottomColor: c.accent }]}
+            accessibilityRole="tab" accessibilityState={{ selected: tab === t }}>
+            <Text style={{ color: tab === t ? c.fg : c.muted, fontWeight: "700" }}>{t === "trade" ? "Trade" : "Play"}</Text>
+          </Pressable>
+        ))}
+      </View>
+      {tab === "trade" ? <TradeScreen /> : <PlayScreen colors={c} />}
+    </SafeAreaView>
   );
 }
 
@@ -82,8 +108,7 @@ function TradeScreen() {
   const v = verdict(give, get);
 
   return (
-    <SafeAreaView edges={["top", "left", "right"]} style={[s.root, { backgroundColor: c.bg }]}>
-      <StatusBar style={dark ? "light" : "dark"} />
+    <View style={[s.root, { backgroundColor: c.bg }]}>
       <ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled">
         <View style={s.headRow}>
           <Text style={[s.h1, { color: c.fg }]}>Even Trade</Text>
@@ -161,7 +186,7 @@ function TradeScreen() {
       <SearchModal visible={picking !== null} game={game} onGame={setGame} colors={c}
         onClose={() => setPicking(null)}
         onPick={(card) => { if (picking) update({ ...trade, [picking]: addCard(trade[picking], card) }); setPicking(null); }} />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -247,9 +272,14 @@ function SearchModal(p: {
       if (q.trim().length < 2) { setResults([]); return; }
       const ctl = new AbortController(); abort.current = ctl;
       setLoading(true); setError(null);
-      try { setResults(await source.search(q, ctl.signal)); }
-      catch (e: any) { if (e?.name !== "AbortError") setError(e?.message ?? "Search failed. Check your connection."); }
-      finally { if (abort.current === ctl) setLoading(false); }
+      try {
+        const found = await source.search(q, ctl.signal);
+        if (abort.current === ctl) setResults(found);
+      } catch (e: any) {
+        // A newer search cancels the older one; that's not an error worth showing.
+        if (ctl.signal.aborted || abort.current !== ctl) return;
+        setError("Search didn't go through. Check your connection and try again.");
+      } finally { if (abort.current === ctl) setLoading(false); }
     }, 350);
     return () => clearTimeout(t);
   }, [q, source]);
@@ -346,19 +376,11 @@ function SavedModal(p: { visible: boolean; colors: Colors; onClose: () => void; 
   );
 }
 
-type Colors = typeof LIGHT;
-const LIGHT = {
-  bg: "#F3F4F8", surface: "#FFFFFF", line: "#DADDE8", fg: "#161A2E", muted: "#5D6382",
-  accent: "#3550D6", onAccent: "#FFFFFF", give: "#C7741A", get: "#0E8C7E", warn: "#B4541A",
-};
-const DARK: Colors = {
-  bg: "#0F1120", surface: "#181B2E", line: "#2C3150", fg: "#ECEEF8", muted: "#9BA1C2",
-  accent: "#8EA2FF", onAccent: "#0F1120", give: "#F0A050", get: "#4FD1BF", warn: "#F39A5E",
-};
-
 const s = StyleSheet.create({
   root: { flex: 1 },
   page: { padding: 16, paddingBottom: 200, gap: 16 },
+  tabs: { flexDirection: "row", borderBottomWidth: 1 },
+  tab: { flex: 1, alignItems: "center", paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: "transparent" },
   headRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
   actions: { flexDirection: "row", gap: 16 },
   account: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderRadius: 10, padding: 10 },

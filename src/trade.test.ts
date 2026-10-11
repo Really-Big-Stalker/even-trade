@@ -61,7 +61,7 @@ describe("Scryfall parsing", () => {
     const out = parseScryfallCard({
       id: "abc", name: "Sol Ring", set_name: "Commander Masters", collector_number: "400",
       artist: "Mike Bierek", prices: { usd: "1.25", usd_foil: "4.50" },
-      image_uris: { normal: "https://img/x.jpg" },
+      image_uris: { small: "https://img/x.jpg" },
     });
     expect(out.map((c) => [c.variant, c.price])).toEqual([["normal", 1.25], ["foil", 4.5]]);
     expect(out[1].id).toBe("abc:foil");
@@ -70,7 +70,7 @@ describe("Scryfall parsing", () => {
   test("double-faced card uses front face image; foil-only keeps just foil", () => {
     const out = parseScryfallCard({
       id: "d", name: "Delver of Secrets // Insectile Aberration", set_name: "Innistrad", collector_number: "51",
-      prices: { usd: null, usd_foil: "9.00" }, card_faces: [{ image_uris: { normal: "front.jpg" } }, {}],
+      prices: { usd: null, usd_foil: "9.00" }, card_faces: [{ image_uris: { small: "front.jpg" } }, {}],
     });
     expect(out).toHaveLength(1);
     expect(out[0].imageUrl).toBe("front.jpg");

@@ -20,7 +20,7 @@ async function politeFetch(url: string, signal?: AbortSignal): Promise<Response>
 /** Turns one Scryfall card object into one or two priced printings (normal and foil). */
 export function parseScryfallCard(c: any): Card[] {
   const image =
-    c.image_uris?.normal ?? c.card_faces?.[0]?.image_uris?.normal ?? null;
+    c.image_uris?.small ?? c.card_faces?.[0]?.image_uris?.small ?? null;
   const base = {
     game: "magic" as const,
     name: c.name,

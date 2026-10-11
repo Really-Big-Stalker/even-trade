@@ -32,7 +32,8 @@ export async function searchViaBackend(
     if (!json || !json.body) return null;
     return { body: json.body, fetchedAt: json.fetchedAt, stale: !!json.stale };
   } catch (e: any) {
-    if (e?.name === "AbortError") throw e;
+    // React Native doesn't always name cancellations "AbortError"; check the signal instead.
+    if (signal?.aborted || e?.name === "AbortError") throw e;
     return null;
   }
 }
