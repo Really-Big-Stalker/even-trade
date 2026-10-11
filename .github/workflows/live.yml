@@ -1,0 +1,49 @@
+name: Live preview
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: Install
+        run: |
+          npm install
+          npx expo install expo-status-bar @react-native-async-storage/async-storage react react-native
+          npx expo install --fix
+          npm install --no-save @expo/ngrok@latest
+      - name: Start server and post the link
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPO_NO_TELEMETRY: "1"
+        run: |
+          CI=1 npx expo start --tunnel --go > expo.log 2>&1 &
+          for i in $(seq 1 120); do
+            URL=$(grep -oE "exp://[A-Za-z0-9._-]+\.exp\.direct(:[0-9]+)?" expo.log | head -1)
+            [ -n "$URL" ] && break
+            sleep 2
+          done
+          if [ -z "$URL" ]; then
+            echo "::error title=Tunnel failed::$(tail -c 1500 expo.log | tr '\n' ' ')"
+            exit 1
+          fi
+          ISSUE=$(gh issue list --label live-preview --state open --json number --jq '.[0].number')
+          if [ -z "$ISSUE" ]; then
+            gh label create live-preview --color 3550D6 --force >/dev/null
+            ISSUE=$(gh issue create --title "Live preview link" --label live-preview --body "Links to open Even Trade in Expo Go appear in the comments." | grep -oE '[0-9]+$')
+          fi
+          gh issue comment "$ISSUE" --body "Live for about an hour from $(date -u +%H:%M) UTC. Open in Expo Go: $URL"
+          echo "::notice title=Live link::$URL"
+          # warm the bundle so the first open is fast
+          curl -s "http://localhost:8081/index.bundle?platform=android&dev=true" -o /dev/null || true
+          sleep 3600
