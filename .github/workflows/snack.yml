@@ -1,0 +1,27 @@
+name: Publish to Snack
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  snack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: Upload to Snack
+        run: |
+          npm install --no-save --no-package-lock snack-sdk@latest
+          echo "snack-sdk $(node -p "require('snack-sdk/package.json').version")"
+          OUT=$(node scripts/publish-snack.cjs)
+          echo "$OUT"
+          echo "::notice title=Snack::$OUT"
+          {
+            echo "## Open in Expo Go"
+            echo ""
+            echo "$OUT"
+          } >> "$GITHUB_STEP_SUMMARY"
