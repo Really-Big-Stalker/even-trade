@@ -19,7 +19,7 @@ Trade fairness checker for Pokémon and Magic: The Gathering.
    cd even-trade
    npx expo install @react-native-async-storage/async-storage
    ```
-3. Copy `App.tsx` and the `src` folder from this zip into that `even-trade` folder, replacing the existing `App.tsx`.
+3. Copy `App.tsx` and the `src` folder from this repository into that `even-trade` folder, replacing the existing `App.tsx`. (Once the full Expo project is committed here, this step becomes a plain `git clone`.)
 4. Run `npx expo start` and scan the QR code with the Expo Go app on your phone (same Wi-Fi as the computer).
 
 ## Not done yet
