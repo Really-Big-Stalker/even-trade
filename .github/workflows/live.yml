@@ -30,6 +30,11 @@ jobs:
           CI=1 npx expo start --tunnel --go > expo.log 2>&1 &
           for i in $(seq 1 120); do
             URL=$(grep -oE "exp://[A-Za-z0-9._-]+\.exp\.direct(:[0-9]+)?" expo.log | head -1)
+            if [ -z "$URL" ] && grep -q "Tunnel ready" expo.log; then
+              HOST=$(curl -s http://127.0.0.1:4040/api/tunnels | grep -oE '[A-Za-z0-9._-]+\.exp\.direct' | head -1)
+              [ -z "$HOST" ] && HOST=$(curl -s -H "expo-platform: android" -H "accept: application/expo+json,application/json" http://localhost:8081 | grep -oE '[A-Za-z0-9._-]+\.exp\.direct' | head -1)
+              [ -n "$HOST" ] && URL="exp://$HOST"
+            fi
             [ -n "$URL" ] && break
             sleep 2
           done
