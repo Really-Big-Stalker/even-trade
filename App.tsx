@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator, FlatList, Image, Modal, Pressable, SafeAreaView, ScrollView,
+  ActivityIndicator, FlatList, Image, Modal, Pressable, ScrollView,
   StyleSheet, Text, TextInput, useColorScheme, View,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { Card, Game, PriceSource } from "./src/sources/types";
 import { scryfall } from "./src/sources/scryfall";
@@ -22,6 +23,15 @@ type Side = "give" | "get";
 const empty = (game: Game): Trade => ({ game, give: [], get: [] });
 
 export default function App() {
+  return (
+    <SafeAreaProvider>
+      <TradeScreen />
+    </SafeAreaProvider>
+  );
+}
+
+function TradeScreen() {
+  const insets = useSafeAreaInsets();
   const dark = useColorScheme() === "dark";
   const c = dark ? DARK : LIGHT;
   const [trades, setTrades] = useState<Record<Game, Trade>>({ pokemon: empty("pokemon"), magic: empty("magic") });
@@ -44,7 +54,7 @@ export default function App() {
   const v = verdict(give, get);
 
   return (
-    <SafeAreaView style={[s.root, { backgroundColor: c.bg }]}>
+    <SafeAreaView edges={["top", "left", "right"]} style={[s.root, { backgroundColor: c.bg }]}>
       <StatusBar style={dark ? "light" : "dark"} />
       <ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled">
         <View style={s.headRow}>
@@ -73,7 +83,7 @@ export default function App() {
         ))}
       </ScrollView>
 
-      <View style={[s.verdict, { backgroundColor: c.surface, borderColor: c.line }]}>
+      <View style={[s.verdict, { backgroundColor: c.surface, borderColor: c.line, paddingBottom: 16 + insets.bottom }]}>
         <View style={[s.bar, { backgroundColor: c.line }]}>
           <View style={{ flex: give || 1, backgroundColor: c.give }} />
           <View style={{ flex: get || 1, backgroundColor: c.get }} />
@@ -191,6 +201,7 @@ function SearchModal(p: { visible: boolean; source: PriceSource; colors: Colors;
   const label = useMemo(() => (p.source.game === "magic" ? "Search Magic cards" : "Search Pokémon cards, e.g. charizard 199"), [p.source]);
   return (
     <Modal visible={p.visible} animationType="slide" onRequestClose={p.onClose}>
+      <SafeAreaProvider>
       <SafeAreaView style={[s.root, { backgroundColor: c.bg }]}>
         <View style={[s.page, { flex: 1 }]}>
           <View style={s.headRow}>
@@ -223,6 +234,7 @@ function SearchModal(p: { visible: boolean; source: PriceSource; colors: Colors;
           </Text>
         </View>
       </SafeAreaView>
+      </SafeAreaProvider>
     </Modal>
   );
 }
@@ -255,7 +267,7 @@ const s = StyleSheet.create({
   qty: { flexDirection: "row", alignItems: "center", gap: 4, marginLeft: "auto" },
   qBtn: { borderWidth: 1, borderRadius: 7, width: 32, height: 30, alignItems: "center", justifyContent: "center" },
   add: { borderWidth: 1.5, borderStyle: "dashed", borderRadius: 10, padding: 12, alignItems: "center" },
-  verdict: { position: "absolute", left: 0, right: 0, bottom: 0, borderTopWidth: 1, padding: 16, paddingBottom: 30, gap: 6 },
+  verdict: { position: "absolute", left: 0, right: 0, bottom: 0, borderTopWidth: 1, padding: 16, gap: 6 },
   bar: { flexDirection: "row", height: 12, borderRadius: 6, overflow: "hidden" },
   totals: { flexDirection: "row", justifyContent: "space-between" },
   vMain: { fontSize: 20, fontWeight: "800" },
