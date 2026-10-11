@@ -4,7 +4,7 @@ import type { Game } from "./types";
  * The Supabase project that caches searches. Filled in once the project is linked;
  * while it's null the app calls Scryfall and pokemontcg.io directly.
  */
-export const BACKEND_URL: string | null = null;
+export const BACKEND_URL: string | null = "https://vmccvftiewrklrmzgczx.supabase.co";
 
 export interface BackendResult {
   body: any;
