@@ -34,6 +34,30 @@ jobs:
       - name: Apply database changes
         run: supabase db push --include-all > db.log 2>&1 < /dev/null || { echo "::error title=Database push failed::$(tail -c 1200 db.log | tr '\n' ' ')"; exit 1; }
 
+      - name: Configure sign-in
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+        run: |
+          BODY=$(node -e '
+            const b = { site_url: "eventrade://", uri_allow_list: "exp://**,eventrade://**" };
+            if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+              Object.assign(b, { external_google_enabled: true,
+                external_google_client_id: process.env.GOOGLE_CLIENT_ID,
+                external_google_secret: process.env.GOOGLE_CLIENT_SECRET });
+            }
+            console.log(JSON.stringify(b));')
+          CODE=$(curl -s -o auth.json -w "%{http_code}" -X PATCH "https://api.supabase.com/v1/projects/$REF/config/auth" \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H "Content-Type: application/json" -d "$BODY")
+          if [ "$CODE" != "200" ]; then echo "::error title=Auth config failed::$CODE $(head -c 600 auth.json)"; exit 1; fi
+          GOOGLE=$(node -p "require('./auth.json').external_google_enabled")
+          echo "::notice title=Sign-in::Google enabled: $GOOGLE"
+
+      - name: Report public app key
+        run: |
+          curl -s "https://api.supabase.com/v1/projects/$REF/api-keys" -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" > keys.json
+          echo "::notice title=Public key::$(node -p "const k=require('./keys.json');(k.find(x=>x.type==='publishable')||k.find(x=>x.name==='anon')||{}).api_key||'none: '+JSON.stringify(k.map(x=>x.name+'/'+x.type))")"
+
       - name: Deploy search function
         run: supabase functions deploy search --project-ref "$REF" --use-api > fn.log 2>&1 || { echo "::error title=Function deploy failed::$(tail -c 1200 fn.log | tr '\n' ' ')"; exit 1; }
 
