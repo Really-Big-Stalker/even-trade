@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { addCard, canUseConditions, freshness, lineValue, sideTotal, verdict } from "./trade";
 import { parseScryfallCard } from "./sources/scryfall";
-import { buildPokemonQuery, parsePokemonCard } from "./sources/pokemontcg";
+import { byPriceDesc, isPhysical, parseTcgdexCard, splitPokemonQuery } from "./sources/tcgdex";
 import type { Card } from "./sources/types";
 import { searchViaBackend } from "./sources/backend";
 
 const card = (id: string, price: number | null): Card => ({
   id, game: "pokemon", name: id, setName: "Test", number: "1", variant: "normal",
-  imageUrl: null, price, priceUpdatedAt: null, source: "TCGplayer via pokemontcg.io",
+  imageUrl: null, price, priceUpdatedAt: null, source: "TCGplayer via TCGdex",
 });
 
 describe("trade math", () => {
@@ -81,23 +81,39 @@ describe("Scryfall parsing", () => {
   });
 });
 
-describe("pokemontcg.io parsing", () => {
-  test("one entry per TCGplayer variant, market price preferred", () => {
-    const out = parsePokemonCard({
-      id: "sv3pt5-199", name: "Charizard ex", number: "199", set: { name: "151" },
-      images: { small: "s.png" },
-      tcgplayer: { updatedAt: "2026/10/09", prices: { holofoil: { market: 148, mid: 150 }, reverseHolofoil: { mid: 20 } } },
-    });
-    expect(out.map((c) => [c.id, c.price])).toEqual([["sv3pt5-199:holofoil", 148], ["sv3pt5-199:reverseHolofoil", 20]]);
-    expect(out[0].priceUpdatedAt).toBe("2026/10/09");
+describe("TCGdex parsing", () => {
+  const charizard = {
+    id: "sv03.5-199", localId: "199", name: "Charizard ex", image: "https://assets.tcgdex.net/en/sv/sv03.5/199",
+    set: { id: "sv03.5", name: "151" },
+    pricing: {
+      cardmarket: { unit: "EUR", avg: 370.41 },
+      tcgplayer: { unit: "USD", updated: "2026-10-10T22:55:13.113Z",
+        holofoil: { lowPrice: 296, midPrice: 362.21, marketPrice: 322.08 } },
+    },
+  };
+  test("one priced entry per TCGplayer variant, ignoring unit and updated", () => {
+    const out = parseTcgdexCard(charizard);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ id: "sv03.5-199", variant: "holofoil", price: 322.08, setName: "151", number: "199",
+      imageUrl: "https://assets.tcgdex.net/en/sv/sv03.5/199/low.png", priceUpdatedAt: "2026-10-10T22:55:13.113Z" });
   });
-  test("card with no tcgplayer block is unpriced", () => {
-    expect(parsePokemonCard({ id: "z", name: "Z", number: "1", set: { name: "S" } })[0].price).toBeNull();
+  test("several variants get distinct ids; mid price when no market price", () => {
+    const out = parseTcgdexCard({ ...charizard, pricing: { tcgplayer: { unit: "USD", normal: { midPrice: 2 }, "reverse-holofoil": { marketPrice: 5 } } } });
+    expect(out.map((c) => [c.id, c.price])).toEqual([["sv03.5-199:normal", 2], ["sv03.5-199:reverse-holofoil", 5]]);
   });
-  test("query builder", () => {
-    expect(buildPokemonQuery("charizard 199")).toBe("name:charizard* number:199");
-    expect(buildPokemonQuery("charizard ex")).toBe('name:"charizard ex*"');
-    expect(buildPokemonQuery("gengar TG06")).toBe("name:gengar* number:TG06");
+  test("no TCGplayer pricing is unpriced, sorted last", () => {
+    const unpriced = parseTcgdexCard({ ...charizard, pricing: { cardmarket: { avg: 1 } } })[0];
+    expect(unpriced.price).toBeNull();
+    expect([unpriced, ...parseTcgdexCard(charizard)].sort(byPriceDesc).map((c) => c.price)).toEqual([322.08, null]);
+  });
+  test("TCG Pocket cards are filtered out", () => {
+    expect(isPhysical({ image: "https://assets.tcgdex.net/en/tcgp/A2b/010" })).toBe(false);
+    expect(isPhysical({ image: "https://assets.tcgdex.net/en/sv/sv03.5/006" })).toBe(true);
+  });
+  test("query splitting", () => {
+    expect(splitPokemonQuery("charizard 199")).toEqual({ name: "charizard", number: "199" });
+    expect(splitPokemonQuery("charizard ex")).toEqual({ name: "charizard ex", number: null });
+    expect(splitPokemonQuery("gengar TG06")).toEqual({ name: "gengar", number: "TG06" });
   });
 });
 

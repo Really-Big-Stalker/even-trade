@@ -8,13 +8,13 @@ import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from "react-native-
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { Card, Game, PriceSource } from "./src/sources/types";
 import { scryfall } from "./src/sources/scryfall";
-import { pokemontcg } from "./src/sources/pokemontcg";
+import { tcgdex } from "./src/sources/tcgdex";
 import {
   addCard, CONDITIONS, Condition, freshness, Line, lineConditionsOn, lineValue,
   money, sideTotal, Trade, verdict,
 } from "./src/trade";
 
-const SOURCES: Record<Game, PriceSource> = { pokemon: pokemontcg, magic: scryfall };
+const SOURCES: Record<Game, PriceSource> = { pokemon: tcgdex, magic: scryfall };
 const STORE_KEY = "even-trade:trade-v2";
 const GAME_LABEL: Record<Game, string> = { pokemon: "Pokémon", magic: "Magic" };
 // Stage 4 replaces this with the RevenueCat entitlement check.
@@ -231,7 +231,7 @@ function SearchModal(p: {
           <Text style={{ color: c.muted, fontSize: 11, marginTop: 6 }}>
             {p.game === "magic"
               ? "Card data and images from Scryfall. Not affiliated with Wizards of the Coast."
-              : "Prices from TCGplayer via pokemontcg.io. Not affiliated with Nintendo or The Pokémon Company."}
+              : "Card data from TCGdex, prices from TCGplayer. Not affiliated with Nintendo or The Pokémon Company."}
           </Text>
         </View>
       </SafeAreaView>

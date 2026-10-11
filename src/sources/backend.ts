@@ -2,7 +2,7 @@ import type { Game } from "./types";
 
 /**
  * The Supabase project that caches searches. Filled in once the project is linked;
- * while it's null the app calls Scryfall and pokemontcg.io directly.
+ * while it's null the app calls Scryfall and TCGdex directly.
  */
 export const BACKEND_URL: string | null = "https://vmccvftiewrklrmzgczx.supabase.co";
 

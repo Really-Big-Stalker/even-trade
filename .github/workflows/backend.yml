@@ -34,19 +34,13 @@ jobs:
       - name: Apply database changes
         run: supabase db push --include-all > db.log 2>&1 < /dev/null || { echo "::error title=Database push failed::$(tail -c 1200 db.log | tr '\n' ' ')"; exit 1; }
 
-      - name: Set function secrets
-        env:
-          POKEMON_API_KEY: ${{ secrets.POKEMON_API_KEY }}
-        run: |
-          if [ -n "$POKEMON_API_KEY" ]; then supabase secrets set --project-ref "$REF" POKEMON_API_KEY="$POKEMON_API_KEY"; fi
-
       - name: Deploy search function
         run: supabase functions deploy search --project-ref "$REF" --use-api > fn.log 2>&1 || { echo "::error title=Function deploy failed::$(tail -c 1200 fn.log | tr '\n' ' ')"; exit 1; }
 
       - name: Smoke test
         run: |
           sleep 5
-          for q in "game=magic&q=sol%20ring" "game=pokemon&q=name%3Apikachu*"; do
+          for q in "game=magic&q=sol%20ring" "game=pokemon&q=charizard%20199"; do
             OUT=$(curl -s "https://$REF.supabase.co/functions/v1/search?$q")
             echo "::notice title=Search $q::$(echo "$OUT" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const j=JSON.parse(s);console.log(j.error?('ERROR '+j.error):('cards='+(j.body?.data?.length??0)+' cached='+j.cached+' at '+j.fetchedAt))}catch(e){console.log('bad response: '+s.slice(0,300))}})")"
           done

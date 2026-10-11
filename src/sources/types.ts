@@ -16,7 +16,7 @@ export interface Card {
   priceUpdatedAt: string | null;
   /** Required on screen for Magic images under Scryfall's terms. */
   artist?: string;
-  source: "Scryfall" | "TCGplayer via pokemontcg.io";
+  source: "Scryfall" | "TCGplayer via TCGdex";
 }
 
 export interface PriceSource {

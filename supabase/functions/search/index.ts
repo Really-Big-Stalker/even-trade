@@ -1,6 +1,6 @@
 // Caching proxy for card searches.
 // GET /functions/v1/search?game=magic|pokemon&q=<upstream query>
-// Magic results are kept 20 hours (Scryfall refreshes prices daily); Pokémon 6 hours.
+// Magic results are kept 20 hours (Scryfall refreshes prices daily); Pokémon 6 hours (TCGdex).
 // If the upstream API fails, the last cached result is returned with stale: true.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -22,13 +22,24 @@ async function upstream(game: Game, q: string): Promise<unknown> {
     if (!res.ok) throw new Error(`Scryfall ${res.status}`);
     return res.json();
   }
-  const url = `https://api.pokemontcg.io/v2/cards?pageSize=25&orderBy=-set.releaseDate&q=${encodeURIComponent(q)}`;
-  const headers: Record<string, string> = { Accept: "application/json" };
-  const key = Deno.env.get("POKEMON_API_KEY");
-  if (key) headers["X-Api-Key"] = key;
-  const res = await fetch(url, { headers });
-  if (!res.ok) throw new Error(`pokemontcg.io ${res.status}`);
-  return res.json();
+  // Pokémon via TCGdex: list matching cards, skip digital TCG Pocket cards, then fetch
+  // details (which carry TCGplayer prices) for up to 20 of them.
+  const words = q.split(/\s+/).filter(Boolean);
+  const number = words.find((w) => /^\d+[a-z]?$/i.test(w) || /^[a-z]{1,4}\d+$/i.test(w));
+  const name = words.filter((w) => w !== number).join(" ");
+  const params = new URLSearchParams({ "pagination:itemsPerPage": "60" });
+  if (name) params.set("name", name);
+  if (number) params.set("localId", number);
+  const res = await fetch(`https://api.tcgdex.net/v2/en/cards?${params}`);
+  if (!res.ok) throw new Error(`TCGdex ${res.status}`);
+  const briefs = ((await res.json()) as any[])
+    .filter((b) => !(b.image ?? "").includes("/tcgp/"))
+    .slice(0, 20);
+  const details = await Promise.all(briefs.map((b) =>
+    fetch(`https://api.tcgdex.net/v2/en/cards/${encodeURIComponent(b.id)}`)
+      .then((r) => (r.ok ? r.json() : null)).catch(() => null)
+  ));
+  return { data: details.filter(Boolean) };
 }
 
 Deno.serve(async (req) => {
