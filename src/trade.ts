@@ -10,7 +10,8 @@ export const CONDITIONS = {
 export type Condition = keyof typeof CONDITIONS;
 
 export interface Line { card: Card; condition: Condition; qty: number }
-export interface Trade { game: Game; give: Line[]; get: Line[] }
+/** A trade can mix games: Magic cards on one side, Pokémon on the other, or both. */
+export interface Trade { give: Line[]; get: Line[] }
 
 /** Even if the gap is within this share of the larger side. */
 export const FAIR_SHARE = 0.05;
@@ -25,8 +26,13 @@ export function lineValue(l: Line, conditionsOn: boolean): number {
   return round((l.card.price ?? 0) * f * l.qty);
 }
 
-export function sideTotal(lines: Line[], conditionsOn: boolean): number {
-  return round(lines.reduce((t, l) => t + lineValue(l, conditionsOn), 0));
+/** Condition discounts apply per card: always for Magic, for Pokémon only with Pro. */
+export function lineConditionsOn(l: Line, isPro: boolean): boolean {
+  return canUseConditions(l.card.game, isPro);
+}
+
+export function sideTotal(lines: Line[], isPro: boolean): number {
+  return round(lines.reduce((t, l) => t + lineValue(l, lineConditionsOn(l, isPro)), 0));
 }
 
 export type Verdict =

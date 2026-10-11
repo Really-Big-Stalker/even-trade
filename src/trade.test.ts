@@ -18,6 +18,15 @@ describe("trade math", () => {
   test("missing price counts as zero", () => {
     expect(sideTotal([{ card: card("a", null), condition: "NM", qty: 1 }], true)).toBe(0);
   });
+  test("mixed-game side: Magic condition always applies, Pokémon only with Pro", () => {
+    const magic: Card = { ...card("m", 100), game: "magic", source: "Scryfall" };
+    const lines = [
+      { card: magic, condition: "LP" as const, qty: 1 },
+      { card: card("p", 100), condition: "LP" as const, qty: 1 },
+    ];
+    expect(sideTotal(lines, false)).toBe(185);
+    expect(sideTotal(lines, true)).toBe(170);
+  });
   test("verdict thresholds", () => {
     expect(verdict(0, 10).kind).toBe("incomplete");
     expect(verdict(100, 96).kind).toBe("even");

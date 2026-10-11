@@ -10,17 +10,18 @@ import type { Card, Game, PriceSource } from "./src/sources/types";
 import { scryfall } from "./src/sources/scryfall";
 import { pokemontcg } from "./src/sources/pokemontcg";
 import {
-  addCard, canUseConditions, CONDITIONS, Condition, freshness, Line, lineValue,
+  addCard, CONDITIONS, Condition, freshness, Line, lineConditionsOn, lineValue,
   money, sideTotal, Trade, verdict,
 } from "./src/trade";
 
 const SOURCES: Record<Game, PriceSource> = { pokemon: pokemontcg, magic: scryfall };
-const STORE_KEY = "even-trade:last";
+const STORE_KEY = "even-trade:trade-v2";
+const GAME_LABEL: Record<Game, string> = { pokemon: "Pokémon", magic: "Magic" };
 // Stage 4 replaces this with the RevenueCat entitlement check.
 const IS_PRO = false;
 
 type Side = "give" | "get";
-const empty = (game: Game): Trade => ({ game, give: [], get: [] });
+const EMPTY: Trade = { give: [], get: [] };
 
 export default function App() {
   return (
@@ -34,23 +35,20 @@ function TradeScreen() {
   const insets = useSafeAreaInsets();
   const dark = useColorScheme() === "dark";
   const c = dark ? DARK : LIGHT;
-  const [trades, setTrades] = useState<Record<Game, Trade>>({ pokemon: empty("pokemon"), magic: empty("magic") });
+  const [trade, setTrade] = useState<Trade>(EMPTY);
   const [game, setGame] = useState<Game>("pokemon");
   const [picking, setPicking] = useState<Side | null>(null);
-  const trade = trades[game];
-  const condOn = canUseConditions(game, IS_PRO);
 
   useEffect(() => {
-    AsyncStorage.getItem(STORE_KEY).then((s) => { if (s) setTrades(JSON.parse(s)); }).catch(() => {});
+    AsyncStorage.getItem(STORE_KEY).then((s) => { if (s) setTrade(JSON.parse(s)); }).catch(() => {});
   }, []);
   const update = (t: Trade) => {
-    const next = { ...trades, [game]: t };
-    setTrades(next);
-    AsyncStorage.setItem(STORE_KEY, JSON.stringify(next)).catch(() => {});
+    setTrade(t);
+    AsyncStorage.setItem(STORE_KEY, JSON.stringify(t)).catch(() => {});
   };
 
-  const give = sideTotal(trade.give, condOn);
-  const get = sideTotal(trade.get, condOn);
+  const give = sideTotal(trade.give, IS_PRO);
+  const get = sideTotal(trade.get, IS_PRO);
   const v = verdict(give, get);
 
   return (
@@ -59,25 +57,16 @@ function TradeScreen() {
       <ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled">
         <View style={s.headRow}>
           <Text style={[s.h1, { color: c.fg }]}>Even Trade</Text>
-          <Pressable onPress={() => update(empty(game))} accessibilityRole="button">
+          <Pressable onPress={() => update(EMPTY)} accessibilityRole="button">
             <Text style={{ color: c.accent }}>New trade</Text>
           </Pressable>
         </View>
 
-        <View style={[s.switch, { borderColor: c.line, backgroundColor: c.surface }]}>
-          {(["pokemon", "magic"] as Game[]).map((g) => (
-            <Pressable key={g} onPress={() => setGame(g)} style={[s.seg, game === g && { backgroundColor: c.accent }]}
-              accessibilityRole="tab" accessibilityState={{ selected: game === g }}>
-              <Text style={{ color: game === g ? c.onAccent : c.fg, fontWeight: "600" }}>
-                {g === "pokemon" ? "Pokémon" : "Magic"}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+        <Text style={{ color: c.muted, fontSize: 13 }}>Mix Magic and Pokémon cards on either side.</Text>
 
         {(["give", "get"] as Side[]).map((side) => (
           <SideBlock key={side} side={side} lines={trade[side]} total={side === "give" ? give : get}
-            condOn={condOn} colors={c} showUpsell={game === "pokemon" && !IS_PRO}
+            colors={c}
             onAdd={() => setPicking(side)}
             onChange={(lines) => update({ ...trade, [side]: lines })} />
         ))}
@@ -106,7 +95,7 @@ function TradeScreen() {
         </Text>
       </View>
 
-      <SearchModal visible={picking !== null} source={SOURCES[game]} colors={c}
+      <SearchModal visible={picking !== null} game={game} onGame={setGame} colors={c}
         onClose={() => setPicking(null)}
         onPick={(card) => { if (picking) update({ ...trade, [picking]: addCard(trade[picking], card) }); setPicking(null); }} />
     </SafeAreaView>
@@ -114,7 +103,7 @@ function TradeScreen() {
 }
 
 function SideBlock(p: {
-  side: Side; lines: Line[]; total: number; condOn: boolean; colors: Colors; showUpsell: boolean;
+  side: Side; lines: Line[]; total: number; colors: Colors;
   onAdd: () => void; onChange: (l: Line[]) => void;
 }) {
   const { colors: c } = p;
@@ -126,24 +115,24 @@ function SideBlock(p: {
         <Text style={[s.h2, { color: c.fg }]}>{p.side === "give" ? "You give" : "You get"}</Text>
         <Text style={[s.mono, { color: c.fg, fontWeight: "700" }]}>{money(p.total)}</Text>
       </View>
-      {p.lines.map((l, i) => (
+      {p.lines.map((l, i) => { const condOn = lineConditionsOn(l, IS_PRO); return (
         <View key={`${l.card.id}-${i}`} style={[s.item, { backgroundColor: c.surface, borderColor: c.line, borderLeftColor: tint }]}>
           <View style={s.itemTop}>
             {l.card.imageUrl ? <Image source={{ uri: l.card.imageUrl }} style={s.thumb} /> : null}
             <View style={{ flex: 1 }}>
               <Text style={{ color: c.fg, fontWeight: "600" }}>{l.card.name}</Text>
               <Text style={{ color: c.muted, fontSize: 12 }}>
-                {l.card.setName} #{l.card.number}{l.card.variant !== "normal" ? ` · ${l.card.variant}` : ""}
+                {GAME_LABEL[l.card.game]} · {l.card.setName} #{l.card.number}{l.card.variant !== "normal" ? ` · ${l.card.variant}` : ""}
               </Text>
               {l.card.artist ? <Text style={{ color: c.muted, fontSize: 11 }}>Illus. {l.card.artist}</Text> : null}
               <Text style={{ color: c.muted, fontSize: 11 }}>{l.card.source} · {freshness(l.card.priceUpdatedAt)}</Text>
             </View>
             <Text style={[s.mono, { color: c.fg, fontWeight: "700" }]}>
-              {l.card.price === null ? "No price" : money(lineValue(l, p.condOn))}
+              {l.card.price === null ? "No price" : money(lineValue(l, condOn))}
             </Text>
           </View>
           <View style={s.controls}>
-            {p.condOn ? (
+            {condOn ? (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
                 {(Object.keys(CONDITIONS) as Condition[]).map((k) => (
                   <Pressable key={k} onPress={() => set(i, { condition: k })}
@@ -153,9 +142,9 @@ function SideBlock(p: {
                   </Pressable>
                 ))}
               </ScrollView>
-            ) : p.showUpsell ? (
-              <Text style={{ color: c.muted, fontSize: 12, flex: 1 }}>Condition pricing is in Pro</Text>
-            ) : null}
+            ) : (
+              <Text style={{ color: c.muted, fontSize: 12, flex: 1 }}>Pokémon condition pricing is in Pro</Text>
+            )}
             <View style={s.qty}>
               <Pressable onPress={() => (l.qty > 1 ? set(i, { qty: l.qty - 1 }) : p.onChange(p.lines.filter((_, j) => j !== i)))}
                 style={[s.qBtn, { borderColor: c.line }]} accessibilityLabel={l.qty > 1 ? "One fewer" : "Remove"}>
@@ -168,7 +157,7 @@ function SideBlock(p: {
             </View>
           </View>
         </View>
-      ))}
+      ); })}
       <Pressable onPress={p.onAdd} style={[s.add, { borderColor: tint }]} accessibilityRole="button">
         <Text style={{ color: tint, fontWeight: "600" }}>+ Add a card</Text>
       </Pressable>
@@ -176,8 +165,12 @@ function SideBlock(p: {
   );
 }
 
-function SearchModal(p: { visible: boolean; source: PriceSource; colors: Colors; onClose: () => void; onPick: (c: Card) => void }) {
+function SearchModal(p: {
+  visible: boolean; game: Game; onGame: (g: Game) => void; colors: Colors;
+  onClose: () => void; onPick: (c: Card) => void;
+}) {
   const { colors: c } = p;
+  const source = SOURCES[p.game];
   const [q, setQ] = useState("");
   const [results, setResults] = useState<Card[]>([]);
   const [loading, setLoading] = useState(false);
@@ -191,14 +184,14 @@ function SearchModal(p: { visible: boolean; source: PriceSource; colors: Colors;
       if (q.trim().length < 2) { setResults([]); return; }
       const ctl = new AbortController(); abort.current = ctl;
       setLoading(true); setError(null);
-      try { setResults(await p.source.search(q, ctl.signal)); }
+      try { setResults(await source.search(q, ctl.signal)); }
       catch (e: any) { if (e?.name !== "AbortError") setError(e?.message ?? "Search failed. Check your connection."); }
       finally { if (abort.current === ctl) setLoading(false); }
     }, 350);
     return () => clearTimeout(t);
-  }, [q, p.source]);
+  }, [q, source]);
 
-  const label = useMemo(() => (p.source.game === "magic" ? "Search Magic cards" : "Search Pokémon cards, e.g. charizard 199"), [p.source]);
+  const label = useMemo(() => (p.game === "magic" ? "Search Magic cards, e.g. sol ring" : "Search Pokémon cards, e.g. charizard 199"), [p.game]);
   return (
     <Modal visible={p.visible} animationType="slide" onRequestClose={p.onClose}>
       <SafeAreaProvider>
@@ -207,6 +200,14 @@ function SearchModal(p: { visible: boolean; source: PriceSource; colors: Colors;
           <View style={s.headRow}>
             <Text style={[s.h2, { color: c.fg }]}>Add a card</Text>
             <Pressable onPress={p.onClose}><Text style={{ color: c.accent }}>Cancel</Text></Pressable>
+          </View>
+          <View style={[s.switch, { borderColor: c.line, backgroundColor: c.surface }]}>
+            {(["pokemon", "magic"] as Game[]).map((g) => (
+              <Pressable key={g} onPress={() => p.onGame(g)} style={[s.seg, p.game === g && { backgroundColor: c.accent }]}
+                accessibilityRole="tab" accessibilityState={{ selected: p.game === g }}>
+                <Text style={{ color: p.game === g ? c.onAccent : c.fg, fontWeight: "600" }}>{GAME_LABEL[g]}</Text>
+              </Pressable>
+            ))}
           </View>
           <TextInput autoFocus value={q} onChangeText={setQ} placeholder={label} placeholderTextColor={c.muted}
             autoCorrect={false} style={[s.input, { color: c.fg, borderColor: c.line, backgroundColor: c.surface }]} />
@@ -228,7 +229,7 @@ function SearchModal(p: { visible: boolean; source: PriceSource; colors: Colors;
               </Pressable>
             )} />
           <Text style={{ color: c.muted, fontSize: 11, marginTop: 6 }}>
-            {p.source.game === "magic"
+            {p.game === "magic"
               ? "Card data and images from Scryfall. Not affiliated with Wizards of the Coast."
               : "Prices from TCGplayer via pokemontcg.io. Not affiliated with Nintendo or The Pokémon Company."}
           </Text>
