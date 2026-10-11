@@ -57,3 +57,6 @@ jobs:
             echo ""
             echo "Then tap **Preview** (or scan the QR code there) to load it in Expo Go."
           } >> "$GITHUB_STEP_SUMMARY"
+          SDK=$(node -p "require('expo/package.json').version")
+          RUNTIME=$(node -p "require('./update.json')[0].runtimeVersion")
+          echo "::notice title=Expo Go link::https://expo.dev/projects/$PROJECT_ID/updates/$GROUP (expo $SDK, runtime $RUNTIME)"
