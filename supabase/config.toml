@@ -1,0 +1,5 @@
+# Minimal config for deploying from GitHub Actions.
+project_id = "even-trade"
+
+[functions.search]
+verify_jwt = false

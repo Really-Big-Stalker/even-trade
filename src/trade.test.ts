@@ -3,6 +3,7 @@ import { addCard, canUseConditions, freshness, lineValue, sideTotal, verdict } f
 import { parseScryfallCard } from "./sources/scryfall";
 import { buildPokemonQuery, parsePokemonCard } from "./sources/pokemontcg";
 import type { Card } from "./sources/types";
+import { searchViaBackend } from "./sources/backend";
 
 const card = (id: string, price: number | null): Card => ({
   id, game: "pokemon", name: id, setName: "Test", number: "1", variant: "normal",
@@ -97,5 +98,23 @@ describe("pokemontcg.io parsing", () => {
     expect(buildPokemonQuery("charizard 199")).toBe("name:charizard* number:199");
     expect(buildPokemonQuery("charizard ex")).toBe('name:"charizard ex*"');
     expect(buildPokemonQuery("gengar TG06")).toBe("name:gengar* number:TG06");
+  });
+});
+
+describe("backend cache", () => {
+  const ok = (data: unknown) => (async () => new Response(JSON.stringify(data), { status: 200 })) as unknown as typeof fetch;
+  test("not configured returns null so the app calls the source directly", async () => {
+    expect(await searchViaBackend("magic", "sol ring", undefined, null)).toBeNull();
+  });
+  test("returns cached body and date", async () => {
+    const r = await searchViaBackend("magic", "sol ring", undefined, "https://x.supabase.co",
+      ok({ body: { data: [1] }, fetchedAt: "2026-10-11T00:00:00Z", stale: true }));
+    expect(r).toEqual({ body: { data: [1] }, fetchedAt: "2026-10-11T00:00:00Z", stale: true });
+  });
+  test("server error or network failure falls back", async () => {
+    const bad = (async () => new Response("no", { status: 502 })) as unknown as typeof fetch;
+    const down = (async () => { throw new TypeError("Network request failed"); }) as unknown as typeof fetch;
+    expect(await searchViaBackend("pokemon", "name:pika*", undefined, "https://x", bad)).toBeNull();
+    expect(await searchViaBackend("pokemon", "name:pika*", undefined, "https://x", down)).toBeNull();
   });
 });

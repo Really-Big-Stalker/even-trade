@@ -1,4 +1,5 @@
 import type { Card, PriceSource } from "./types";
+import { searchViaBackend } from "./backend";
 
 // Scryfall terms: no key, 50–100 ms between requests, prices refresh once a day,
 // and Magic data must never sit behind a paywall or required account.
@@ -43,11 +44,17 @@ export const scryfall: PriceSource = {
   async search(query, signal) {
     const q = query.trim();
     if (q.length < 2) return [];
+    const cached = await searchViaBackend("magic", q, signal);
+    if (cached) {
+      return (cached.body.data ?? []).slice(0, 25).flatMap(parseScryfallCard)
+        .map((c: Card) => ({ ...c, priceUpdatedAt: cached.fetchedAt }));
+    }
     const url = `${BASE}/cards/search?unique=prints&order=usd&dir=desc&q=${encodeURIComponent(q)}`;
     const res = await politeFetch(url, signal);
     if (res.status === 404) return []; // Scryfall answers "no cards found" with 404
     if (!res.ok) throw new Error(`Magic card search failed (${res.status}). Try again in a moment.`);
     const json = await res.json();
-    return (json.data ?? []).slice(0, 25).flatMap(parseScryfallCard);
+    const now = new Date().toISOString();
+    return (json.data ?? []).slice(0, 25).flatMap(parseScryfallCard).map((c: Card) => ({ ...c, priceUpdatedAt: now }));
   },
 };

@@ -1,7 +1,8 @@
 import type { Card, PriceSource } from "./types";
+import { searchViaBackend } from "./backend";
 
-// Works without a key at 1,000 requests a day. In Stage 3 this call moves to the
-// backend so the key never ships inside the app.
+// Searches go through the backend cache when it's configured (the key lives there);
+// otherwise the app calls pokemontcg.io directly, which works without a key at 1,000 a day.
 const BASE = "https://api.pokemontcg.io/v2";
 export const POKEMON_API_KEY: string | undefined = undefined;
 
@@ -43,6 +44,8 @@ export const pokemontcg: PriceSource = {
   async search(query, signal) {
     const q = buildPokemonQuery(query);
     if (q.length < 8) return []; // needs at least two letters of a name, or a number
+    const cached = await searchViaBackend("pokemon", q, signal);
+    if (cached) return (cached.body.data ?? []).flatMap(parsePokemonCard);
     const url = `${BASE}/cards?pageSize=25&orderBy=-set.releaseDate&q=${encodeURIComponent(q)}`;
     const headers: Record<string, string> = { Accept: "application/json" };
     if (POKEMON_API_KEY) headers["X-Api-Key"] = POKEMON_API_KEY;
