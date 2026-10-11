@@ -1,0 +1,16 @@
+name: Probe card APIs
+on: workflow_dispatch
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          s1=$(curl -s -o /dev/null -w "%{http_code}" "https://api.pokemontcg.io/v2/cards?pageSize=1&q=name:pikachu*")
+          echo "::notice title=pokemontcg.io status::$s1"
+          L=$(curl -s "https://api.tcgdex.net/v2/en/cards?name=charizard%20ex&pagination:itemsPerPage=3")
+          echo "::notice title=tcgdex list::$(echo "$L" | head -c 900)"
+          ID=$(echo "$L" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log(JSON.parse(s)[0].id))")
+          D=$(curl -s "https://api.tcgdex.net/v2/en/cards/sv03.5-199")
+          echo "::notice title=tcgdex detail keys::$(echo "$D" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);console.log(JSON.stringify({id:j.id,localId:j.localId,name:j.name,image:j.image,set:j.set,variants:j.variants}))})")"
+          echo "::notice title=tcgdex pricing::$(echo "$D" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);console.log(JSON.stringify(j.pricing).slice(0,1500))})")"
+          echo "::notice title=tcgdex number filter::$(curl -s "https://api.tcgdex.net/v2/en/cards?name=charizard&localId=199&pagination:itemsPerPage=3" | head -c 600)"
