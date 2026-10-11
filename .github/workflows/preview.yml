@@ -44,6 +44,12 @@ jobs:
       - name: Link the Expo project
         run: eas init --non-interactive --force
 
+      - name: Configure updates
+        run: |
+          eas update:configure --platform all --non-interactive || true
+          # keep the Expo Go runtime policy even if configure changed it
+          node -e "const f='app.json',j=require('./'+f);j.expo.runtimeVersion={policy:'sdkVersion'};require('fs').writeFileSync(f,JSON.stringify(j,null,2))"
+
       - name: Publish update
         run: |
           eas update --branch preview --message "${{ github.event.head_commit.message || 'Manual publish' }}" --non-interactive --json > update.json
@@ -60,3 +66,12 @@ jobs:
           SDK=$(node -p "require('expo/package.json').version")
           RUNTIME=$(node -p "require('./update.json')[0].runtimeVersion")
           echo "::notice title=Expo Go link::https://expo.dev/projects/$PROJECT_ID/updates/$GROUP (expo $SDK, runtime $RUNTIME)"
+
+      - name: Report update details
+        if: always()
+        run: |
+          GROUP=$(node -p "require('./update.json')[0].group" 2>/dev/null || echo none)
+          echo "::notice title=App config::$(npx expo config --type public --json 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const c=JSON.parse(s);console.log(JSON.stringify({sdk:c.sdkVersion,runtime:c.runtimeVersion,updates:c.updates,platforms:c.platforms}))})")"
+          echo "::notice title=Update entries::$(node -e "console.log(JSON.stringify(require('./update.json').map(u=>({p:u.platform,rt:u.runtimeVersion,id:u.id}))))")"
+          eas update:view "$GROUP" --json > view.json 2>&1 || true
+          echo "::notice title=Update view::$(head -c 1500 view.json | tr '\n' ' ')"
