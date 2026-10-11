@@ -13,6 +13,10 @@ import {
   addCard, CONDITIONS, Condition, freshness, Line, lineConditionsOn, lineValue,
   money, sideTotal, Trade, verdict,
 } from "./src/trade";
+import type { Session } from "@supabase/supabase-js";
+import { supabase } from "./src/supabase";
+import { signInWithGoogle, signOut } from "./src/auth";
+import { deleteTrade, listTrades, saveTrade, SavedTrade } from "./src/history";
 
 const SOURCES: Record<Game, PriceSource> = { pokemon: tcgdex, magic: scryfall };
 const STORE_KEY = "even-trade:trade-v2";
@@ -38,6 +42,32 @@ function TradeScreen() {
   const [trade, setTrade] = useState<Trade>(EMPTY);
   const [game, setGame] = useState<Game>("pokemon");
   const [picking, setPicking] = useState<Side | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [showSaved, setShowSaved] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSession(data.session)).catch(() => {});
+    const { data } = supabase.auth.onAuthStateChange((_e, sess) => setSession(sess));
+    return () => data.subscription.unsubscribe();
+  }, []);
+  useEffect(() => { if (!note) return; const t = setTimeout(() => setNote(null), 3500); return () => clearTimeout(t); }, [note]);
+
+  const doSignIn = async () => {
+    setBusy(true);
+    try { if ((await signInWithGoogle()) === "signed-in") setNote("Signed in"); }
+    catch (e: any) { setNote(e?.message ?? "Sign-in failed. Try again."); }
+    finally { setBusy(false); }
+  };
+  const doSave = async () => {
+    if (!session) { setNote("Sign in with Google to save trades."); return; }
+    if (!trade.give.length && !trade.get.length) { setNote("Add a card before saving."); return; }
+    setBusy(true);
+    try { await saveTrade(trade, IS_PRO); setNote("Trade saved"); }
+    catch (e: any) { setNote(e?.message ?? "Couldn't save the trade."); }
+    finally { setBusy(false); }
+  };
 
   useEffect(() => {
     AsyncStorage.getItem(STORE_KEY).then((s) => { if (s) setTrade(JSON.parse(s)); }).catch(() => {});
@@ -57,10 +87,40 @@ function TradeScreen() {
       <ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled">
         <View style={s.headRow}>
           <Text style={[s.h1, { color: c.fg }]}>Even Trade</Text>
-          <Pressable onPress={() => update(EMPTY)} accessibilityRole="button">
-            <Text style={{ color: c.accent }}>New trade</Text>
-          </Pressable>
+          <View style={s.actions}>
+            <Pressable onPress={() => (session ? setShowSaved(true) : setNote("Sign in with Google to see saved trades."))} accessibilityRole="button">
+              <Text style={{ color: c.accent }}>Saved</Text>
+            </Pressable>
+            <Pressable onPress={doSave} disabled={busy} accessibilityRole="button">
+              <Text style={{ color: c.accent }}>Save</Text>
+            </Pressable>
+            <Pressable onPress={() => update(EMPTY)} accessibilityRole="button">
+              <Text style={{ color: c.accent }}>New</Text>
+            </Pressable>
+          </View>
         </View>
+
+        <View style={[s.account, { borderColor: c.line, backgroundColor: c.surface }]}>
+          {session ? (
+            <>
+              <Text style={{ color: c.muted, fontSize: 13, flex: 1 }} numberOfLines={1}>
+                Signed in as {session.user.email ?? "your Google account"}
+              </Text>
+              <Pressable onPress={() => signOut().then(() => setNote("Signed out"))} accessibilityRole="button">
+                <Text style={{ color: c.accent, fontSize: 13 }}>Sign out</Text>
+              </Pressable>
+            </>
+          ) : (
+            <>
+              <Text style={{ color: c.muted, fontSize: 13, flex: 1 }}>Sign in to save trades and see them on any device.</Text>
+              <Pressable onPress={doSignIn} disabled={busy} style={[s.googleBtn, { borderColor: c.line }]} accessibilityRole="button">
+                {busy ? <ActivityIndicator /> : <Text style={{ color: c.fg, fontWeight: "600", fontSize: 13 }}>Sign in with Google</Text>}
+              </Pressable>
+            </>
+          )}
+        </View>
+
+        {note ? <Text style={{ color: c.fg, fontWeight: "600" }} accessibilityLiveRegion="polite">{note}</Text> : null}
 
         <Text style={{ color: c.muted, fontSize: 13 }}>Mix Magic and Pokémon cards on either side.</Text>
 
@@ -94,6 +154,9 @@ function TradeScreen() {
             : `Ask them to add about ${money(v.gap)} in cards or cash.`}
         </Text>
       </View>
+
+      <SavedModal visible={showSaved} colors={c} onClose={() => setShowSaved(false)}
+        onOpen={(t) => { update(t.trade); setShowSaved(false); setNote("Loaded saved trade"); }} />
 
       <SearchModal visible={picking !== null} game={game} onGame={setGame} colors={c}
         onClose={() => setPicking(null)}
@@ -240,6 +303,49 @@ function SearchModal(p: {
   );
 }
 
+function SavedModal(p: { visible: boolean; colors: Colors; onClose: () => void; onOpen: (t: SavedTrade) => void }) {
+  const { colors: c } = p;
+  const [items, setItems] = useState<SavedTrade[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const load = () => { setError(null); listTrades().then(setItems).catch((e) => setError(e.message)); };
+  useEffect(() => { if (p.visible) load(); else setItems(null); }, [p.visible]);
+  const remove = async (id: string) => {
+    try { await deleteTrade(id); setItems((xs) => (xs ?? []).filter((x) => x.id !== id)); }
+    catch (e: any) { setError(e.message); }
+  };
+  return (
+    <Modal visible={p.visible} animationType="slide" onRequestClose={p.onClose}>
+      <SafeAreaProvider>
+      <SafeAreaView style={[s.root, { backgroundColor: c.bg }]}>
+        <View style={[s.page, { flex: 1, paddingBottom: 16 }]}>
+          <View style={s.headRow}>
+            <Text style={[s.h2, { color: c.fg }]}>Saved trades</Text>
+            <Pressable onPress={p.onClose}><Text style={{ color: c.accent }}>Done</Text></Pressable>
+          </View>
+          {error ? <Text style={{ color: c.warn }}>{error}</Text> : null}
+          {items === null && !error ? <ActivityIndicator /> : null}
+          {items?.length === 0 ? <Text style={{ color: c.muted }}>No saved trades yet. Build a trade and tap Save.</Text> : null}
+          <FlatList data={items ?? []} keyExtractor={(t) => t.id}
+            renderItem={({ item }) => (
+              <View style={[s.result, { borderColor: c.line }]}>
+                <Pressable style={{ flex: 1 }} onPress={() => p.onOpen(item)} accessibilityRole="button">
+                  <Text style={{ color: c.fg, fontWeight: "600" }}>{item.title}</Text>
+                  <Text style={{ color: c.muted, fontSize: 12 }}>
+                    {new Date(item.created_at).toLocaleDateString()} · give {money(Number(item.give_total))} · get {money(Number(item.get_total))}
+                  </Text>
+                </Pressable>
+                <Pressable onPress={() => remove(item.id)} style={[s.qBtn, { borderColor: c.line, width: 64 }]} accessibilityLabel="Delete saved trade">
+                  <Text style={{ color: c.fg, fontSize: 12 }}>Delete</Text>
+                </Pressable>
+              </View>
+            )} />
+        </View>
+      </SafeAreaView>
+      </SafeAreaProvider>
+    </Modal>
+  );
+}
+
 type Colors = typeof LIGHT;
 const LIGHT = {
   bg: "#F3F4F8", surface: "#FFFFFF", line: "#DADDE8", fg: "#161A2E", muted: "#5D6382",
@@ -254,6 +360,9 @@ const s = StyleSheet.create({
   root: { flex: 1 },
   page: { padding: 16, paddingBottom: 200, gap: 16 },
   headRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
+  actions: { flexDirection: "row", gap: 16 },
+  account: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderRadius: 10, padding: 10 },
+  googleBtn: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, minWidth: 140, alignItems: "center" },
   h1: { fontSize: 28, fontWeight: "800", letterSpacing: -0.5 },
   h2: { fontSize: 19, fontWeight: "700" },
   mono: { fontVariant: ["tabular-nums"], fontFamily: undefined },

@@ -19,7 +19,7 @@ jobs:
       - name: Install
         run: |
           npm install
-          npx expo install expo-status-bar @react-native-async-storage/async-storage react-native-safe-area-context react react-native
+          npx expo install expo-status-bar @react-native-async-storage/async-storage react-native-safe-area-context expo-web-browser expo-linking @supabase/supabase-js react-native-url-polyfill react react-native
           npx expo install --fix
           npm install --no-save @expo/ngrok@latest
       - name: Start server and post the link

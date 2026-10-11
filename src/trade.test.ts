@@ -134,3 +134,19 @@ describe("backend cache", () => {
     expect(await searchViaBackend("pokemon", "name:pika*", undefined, "https://x", down)).toBeNull();
   });
 });
+
+describe("sign-in and history helpers", () => {
+  test("reads the auth code or error from the return URL", async () => {
+    const { codeFromUrl, errorFromUrl } = await import("./auth-url");
+    expect(codeFromUrl("exp://x.exp.direct/--/auth-callback?code=abc%2D1")).toBe("abc-1");
+    expect(codeFromUrl("exp://x/--/auth-callback#error=access_denied")).toBeNull();
+    expect(errorFromUrl("exp://x/--/auth-callback?error=access_denied&error_description=User+cancelled")).toBe("User cancelled");
+  });
+  test("saved trade titles", async () => {
+    const { tradeTitle } = await import("./trade-title");
+    const c = (n: string): Card => ({ ...card(n, 1), name: n });
+    expect(tradeTitle({ give: [{ card: c("Charizard ex"), condition: "NM", qty: 1 }, { card: c("Mew ex"), condition: "NM", qty: 1 }],
+      get: [{ card: c("Sol Ring"), condition: "NM", qty: 1 }] })).toBe("Charizard ex + 1 more ↔ Sol Ring");
+    expect(tradeTitle({ give: [], get: [] })).toBe("nothing ↔ nothing");
+  });
+});
