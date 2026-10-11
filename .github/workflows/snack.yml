@@ -15,9 +15,9 @@ jobs:
           node-version: 22
       - name: Upload to Snack
         run: |
-          npm install --no-save --no-package-lock snack-sdk@latest
-          echo "snack-sdk $(node -p "require('snack-sdk/package.json').version")"
-          OUT=$(node scripts/publish-snack.cjs)
+          npm install --no-save --no-package-lock snack-sdk@latest > npm.log 2>&1 || { echo "::error title=npm failed::$(tail -c 1500 npm.log | tr '\n' ' ')"; exit 1; }
+          echo "::notice title=snack-sdk::$(node -p "require('snack-sdk/package.json').version + ' supports ' + JSON.stringify(Object.keys(require('snack-sdk').SDKVersions ? {} : {}))")"
+          OUT=$(node scripts/publish-snack.cjs 2>&1) || { echo "::error title=Snack failed::$(echo "$OUT" | tr '\n' ' ' | head -c 1500)"; exit 1; }
           echo "$OUT"
           echo "::notice title=Snack::$OUT"
           {
