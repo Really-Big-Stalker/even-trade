@@ -10,17 +10,15 @@ Trade fairness checker for Pokémon and Magic: The Gathering.
 - `src/trade.ts` — trade math: condition discounts, totals, the 5% "even" rule, Pro gating.
 - `src/trade.test.ts` — 13 tests for the math and both data sources (run with `bun test`).
 
-## Run it on your phone
+## Run it on your phone (no computer needed)
 
-1. Install Node.js (the LTS version) from nodejs.org.
-2. In a terminal:
-   ```
-   npx create-expo-app@latest even-trade --template blank-typescript
-   cd even-trade
-   npx expo install @react-native-async-storage/async-storage
-   ```
-3. Copy `App.tsx` and the `src` folder from this repository into that `even-trade` folder, replacing the existing `App.tsx`. (Once the full Expo project is committed here, this step becomes a plain `git clone`.)
-4. Run `npx expo start` and scan the QR code with the Expo Go app on your phone (same Wi-Fi as the computer).
+Every push to `main` runs the **Publish to Expo Go** workflow on GitHub, which tests the code, builds it, and publishes it to Expo.
+
+One-time setup:
+1. On expo.dev, sign in, open **Account settings > Access tokens**, and create a token.
+2. In this repository on GitHub, open **Settings > Secrets and variables > Actions** and add a repository secret named `EXPO_TOKEN` with that token.
+
+To open the app: in the repository's **Actions** tab, open the latest **Publish to Expo Go** run. Its summary has a link; open it on your phone and tap **Preview** to load the app in Expo Go.
 
 ## Not done yet
 

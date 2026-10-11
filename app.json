@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "name": "Even Trade",
+    "slug": "even-trade",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "runtimeVersion": { "policy": "sdkVersion" },
+    "ios": { "supportsTablet": false, "bundleIdentifier": "com.reallybigstalker.eventrade" },
+    "android": { "package": "com.reallybigstalker.eventrade" }
+  }
+}
